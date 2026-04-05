@@ -117,6 +117,7 @@ class JudgeMan {
   runners: Record<string, Sprite> = {};
   arrived_order: Record<string, Sprite> = {};
   test_num:number = 1;
+  isFinish:boolean = false;
 
 
   add(key: string, value: Sprite) {
@@ -151,6 +152,11 @@ class JudgeMan {
     const {handleNormalConfetti} = useConfetti(0.5, 0.5);
     handleNormalConfetti();
 
+    // 全員到着したらfinish
+    if( Object.values(this.arrived_order).length === Object.values(this.runners).length ){
+      this.isFinish = true;
+    }
+
 
   }
 
@@ -174,6 +180,8 @@ class JudgeMan {
     this.arrived_order = {};
   };
 
+  
+
 };
 
 type Scene = "title" | "game" | "result";
@@ -184,6 +192,7 @@ type Scene = "title" | "game" | "result";
 // TODO 全員終了したのを確認
 // TODO 終了後に画面遷移
 // TODO フェードアウトアニメーション
+// TODO コールバックを渡すように変更が必要
 class GameManager{
 
   current_scene:Scene = "title" ;
@@ -222,6 +231,11 @@ class GameScene {
 
   }
 
+  start_game(){
+    
+    this.reset_position();
+  }
+
   reset_position() {
     this.runner_list.forEach( value => {
         value.resetPosition();
@@ -233,6 +247,7 @@ class GameScene {
     this.runner_list.forEach( runner => {
       runner.update(input_time);
     });
+
   };
 
   draw(ctx:CanvasRenderingContext2D){
@@ -246,9 +261,75 @@ class GameScene {
     })
   };
 
+  // 終了の確認
+  isFinished():boolean {
+    return this.judgeman.isFinish;
+  };
+  
+
+
 }
 
+
+
 export const App = () => {
+  
+  // UI&シーン切り替えよう型
+  type TitleProps = {
+    onStart: () => void;
+  }
+
+  // タイトル画面
+  const TitleUI: React.FC<TitleProps> = ({ onStart }) => {
+    return (
+      <div>
+        <h1>タイトル</h1>
+        <button onClick= {onStart}> スタート </button>
+      </div>
+    )
+  };
+
+  const [gameFinished, setGameFinish] = useState(false);
+  const gameFinishedRef = useRef(false);
+
+  type GameProps = {
+    onReset: () => void;
+    onResult: () => void;
+    gameFinished: boolean;
+  }
+  // ゲーム画面
+  const GameUI: React.FC<GameProps> = ({ onReset, onResult, gameFinished }) => {
+    return (
+      <div>
+        <button onClick = {onReset}>リセット</button>
+        <button onClick = {onResult} disabled={!gameFinished}>結果を見る</button>
+      </div>
+    )
+  }
+
+  const [current_scene, setScene] = useState<Scene>("title");
+  const sceneRef = useRef<Scene>(current_scene);
+  // current_scene監視用
+  useEffect( () => {
+    sceneRef.current = current_scene;
+  }, [current_scene]);
+
+  // game finished監視用
+  useEffect( () => {
+    gameFinishedRef.current = gameFinished;
+  }, [gameFinished]);
+
+
+
+  const handleStartGame = () => {
+    setScene("game");
+    console.log("current_scene is" + current_scene );
+  }
+
+  const handleResult = () => {
+    setScene("result");
+    console.log("current_scene is " + current_scene);
+  }
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -296,6 +377,10 @@ export const App = () => {
 
   const frameIndexRef = useRef(0);
 
+
+  const sleep = (ms:2000) => {
+    new Promise(resolve => setTimeout(resolve, ms));
+  }
   
 
   // 画像のレンダリング
@@ -307,12 +392,28 @@ export const App = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    
 
 
-    const render = (time: number) => {
+    const render = async (time: number) => {
+      
 
-      myGameScene.current.update(time);
-      myGameScene.current.draw(ctx);
+      if (sceneRef.current === "game"){
+        // console.log("current_scene is game");
+        myGameScene.current.update(time);
+        myGameScene.current.draw(ctx);
+        const finished = myGameScene.current.isFinished();
+        
+        setGameFinish(finished)
+        
+        
+        
+      }
+
+      if (sceneRef.current === "result"){
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      
 
 
       // 10fに一度state更新
@@ -335,10 +436,13 @@ export const App = () => {
     <>
     <canvas ref={ canvasRef } width = {1000} height = {600}></canvas>
 
-    <button onClick={ resetPosition }>リセット</button>
+
+    {/* <button onClick={ resetPosition }>リセット</button> */}
     
     <label>{ debug_string } </label> 
     <label>reamin:{ debug_remain }</label>
+    {current_scene == "title" && <TitleUI onStart={ handleStartGame } />}
+    {current_scene == "game" && <GameUI onReset={ resetPosition} onResult={ handleResult } gameFinished={ gameFinished }/>}
     
     
     </>

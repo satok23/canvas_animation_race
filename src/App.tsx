@@ -37,7 +37,7 @@ class Sprite{
     this.frames = frames;
     this.remainCount = this.goalCount;
     this.addValue = 0;
-    console.log("this called in Sprite constructor");
+    // console.log("this called in Sprite constructor");
 
   }
 
@@ -63,7 +63,7 @@ class Sprite{
         return;
       }
       
-      console.log("runner finish")
+      // console.log("runner finish")
       // judgemanに申告
       this.judgeman.register_arrive(this.name);
       // setMoveCount(0);
@@ -103,14 +103,15 @@ class Sprite{
     this.x = 0;
     this.remainCount = this.goalCount;
 
-    console.log(this.judgeman.get_first());
+    // console.log(this.judgeman.get_first());
   }
 }
 
 // ジャッジまんがすること
-// レースの順位を保持
-// ゴールした人が登録する
-// ゴールすると紙吹雪を舞わせる
+// DONE レースの順位を保持
+// DONE ゴールした人が登録する
+// DONE ゴールすると紙吹雪を舞わせる
+// TODO 紙吹雪の場所と角度を調整
 
 class JudgeMan {
   runners: Record<string, Sprite> = {};
@@ -130,18 +131,18 @@ class JudgeMan {
     if(!Object.keys(this.runners).includes(input_name)){
       return;
     }
-    let arrived_runner:Sprite = this.runners[input_name];
+    const arrived_runner:Sprite = this.runners[input_name];
     // 既に到着者に登録済みの場合リターン
     if(Object.values(this.arrived_order).includes(arrived_runner)){
       return;
     }
-    console.log("call judgeman!")
+    // console.log("call judgeman!")
 
     
-    let current_latest_order:number = Object.keys(this.arrived_order).length + 1;
+    const current_latest_order:number = Object.keys(this.arrived_order).length + 1;
 
-    let order_key:string = current_latest_order.toString() + "th";
-    console.log("order is:"+order_key)
+    const order_key:string = current_latest_order.toString() + "th";
+    console.log("order :"+order_key + " is " + input_name);
     // let order_key:strig = "first"
 
     this.arrived_order[order_key] = this.runners[input_name];
@@ -161,7 +162,7 @@ class JudgeMan {
     let first_key:string = "1th";
     const first_goal:Sprite = this.arrived_order[first_key];
 
-    console.log(first_goal.name);
+    // console.log(first_goal.name);
     return first_goal.name;
   }
 
@@ -169,32 +170,103 @@ class JudgeMan {
     return this.runners[key];
   }
 
+  reset = () => {
+    this.arrived_order = {};
+  };
+
 };
 
+type Scene = "title" | "game" | "result";
+
+// game manager
+// TODO スタートさせる
+// TODO シーンを変更する
+// TODO 全員終了したのを確認
+// TODO 終了後に画面遷移
+// TODO フェードアウトアニメーション
 class GameManager{
 
+  current_scene:Scene = "title" ;
+
+  start_game() {
+    // sceneをgameに変更する
+    this.current_scene = "game";
+  }
+
 };
+
+
+class GameScene {
+  judgeman: JudgeMan;
+  bg_image:HTMLImageElement;
+  runner_list:Sprite[] = [];
+
+  canvas_width:number;
+  canvas_height:number;
+
+  constructor(canvas_width:number, canvas_height:number, frames:HTMLImageElement[], bg_image:HTMLImageElement) {
+    this.canvas_width = canvas_width;
+    this.canvas_height = canvas_height;
+    
+    this.judgeman = new JudgeMan();
+    this.bg_image = new Image();
+    this.bg_image = bg_image;
+    
+    const name_list:string[] = ["parrot1", "parrot2", "parrot3", "parrot4"];
+    name_list.forEach((name, index) => {
+      const y_coord: number = (index+1)*100
+      const new_runner:Sprite = new Sprite(name, 0, y_coord, this.judgeman, frames);
+      this.runner_list.push(new_runner);
+
+    }); 
+
+  }
+
+  reset_position() {
+    this.runner_list.forEach( value => {
+        value.resetPosition();
+    });
+    this.judgeman.reset();
+  }
+
+  update(input_time:number){
+    this.runner_list.forEach( runner => {
+      runner.update(input_time);
+    });
+  };
+
+  draw(ctx:CanvasRenderingContext2D){
+    // background 描画
+    ctx.clearRect(0, 0, this.canvas_width, this.canvas_height);
+    ctx.drawImage(this.bg_image, 0, 100);
+
+    // runnerの描画
+    this.runner_list.forEach( runner => {
+      runner.draw(ctx);
+    })
+  };
+
+}
 
 export const App = () => {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const spriteRef = useRef<Sprite | null>(null);
-  const parrot2 = useRef<Sprite | null>(null);
-  const judgeman = useRef<JudgeMan | null>(null);
 
   const [debug_string, setDebug_string] = useState("");
   const [debug_remain, setDebug_remain] = useState(100);
 
+  const myGameScene = useRef<GameScene | null>(null);
+
   // 初期化
   useEffect(() => {
-      const parrot_images = import.meta.glob('./assets/parrot_pngs/*.png', {
+    // parrot画像の取得
+    const parrot_images = import.meta.glob('./assets/parrot_pngs/*.png', {
         eager: true,
         import: "default"
     });
 
     const input_imgs: HTMLImageElement[] = [];
-
     const framePaths = Object.values(parrot_images);
 
     framePaths.forEach((path) => {
@@ -203,37 +275,31 @@ export const App = () => {
       input_imgs.push(img);
     });
 
+    // 背景画像取得
+    const bg_img = new Image();
+    bg_img.src = bg_ground;
 
-    judgeman.current = new JudgeMan();
-    if(!judgeman.current){
-      console.log("no judgeman here");
-    }
-    else {
-      console.log("judgeman's " + judgeman.current.test_num);
-    }
+    // gamesceneの作成
+    if (!canvasRef.current) return;
+    myGameScene.current = new GameScene(canvasRef.current.width, canvasRef.current.height, input_imgs, bg_img);
+    
 
-    console.log("before create Spcrite");
-    spriteRef.current = new Sprite("parrot1", 0, 0, judgeman.current, input_imgs);
-    parrot2.current = new Sprite("parrot2", 0, 100, judgeman.current,  input_imgs);
-
-    console.log("after create Sprite");
 
   }, []);
 
     // 初期位置に移動するイベント
   const resetPosition = () => {
-    spriteRef.current.resetPosition();
-    parrot2.current.resetPosition();
+    // spriteRef.current.resetPosition();
+    // parrot2.current.resetPosition();
+    myGameScene.current.reset_position();
   };
 
   const frameIndexRef = useRef(0);
 
-  const {handleNormalConfetti} = useConfetti(0.5, 0.5);
+  
 
   // 画像のレンダリング
   useEffect(() => {
-    let lastTime = 0;
-    const frameDuration = 100; //ms
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -241,26 +307,20 @@ export const App = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const bg_img = new Image();
-    bg_img.src = bg_ground;
+
 
     const render = (time: number) => {
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(bg_img, 0, 100);
+      myGameScene.current.update(time);
+      myGameScene.current.draw(ctx);
 
-      spriteRef.current.update(time);
-      spriteRef.current.draw(ctx);
-
-      parrot2.current.update(time);
-      parrot2.current.draw(ctx);
 
       // 10fに一度state更新
-      if ( judgeman.current && Math.floor(time) % 10 === 0){
-        setDebug_string(judgeman.current.get_first())
+      // if ( judgeman.current && Math.floor(time) % 2 === 0){
+      //   setDebug_string(judgeman.current.get_first())
 
-      }
-      setDebug_remain(parrot2.current?.remainCount)
+      // }
+      // setDebug_remain(parrot2.current?.remainCount)
       
       requestAnimationFrame(render);
 
@@ -276,7 +336,7 @@ export const App = () => {
     <canvas ref={ canvasRef } width = {1000} height = {600}></canvas>
 
     <button onClick={ resetPosition }>リセット</button>
-    <button onClick= { handleNormalConfetti }>紙吹雪</button>
+    
     <label>{ debug_string } </label> 
     <label>reamin:{ debug_remain }</label>
     

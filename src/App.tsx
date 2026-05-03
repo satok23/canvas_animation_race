@@ -14,6 +14,10 @@ import  useConfetti  from "./useSmallConfetti";
 class Sprite{
   x: number;
   y: number;
+  name:string;
+  view_name:string;
+  isFinished:boolean;
+  isFinish_registered:boolean;
   remainCount: number;
   addValue: number;
   frames: HTMLImageElement[];
@@ -107,7 +111,7 @@ class Sprite{
   }
 }
 
-// ジャッジまんがすること
+// ジャッジマンがすること
 // DONE レースの順位を保持
 // DONE ゴールした人が登録する
 // DONE ゴールすると紙吹雪を舞わせる
@@ -266,8 +270,20 @@ class GameScene {
     return this.judgeman.isFinish;
   };
   
+}
 
-
+class ResultRunner {
+  name: string;
+  view_name: string;
+  order: string;
+  description: string;
+  
+  constructor(name:string, view_name:string, order:string, description: string) {
+      this.name=name;
+      this.view_name=view_name;
+      this.order=order;
+      this.description =description;
+  }
 }
 
 
@@ -284,7 +300,7 @@ export const App = () => {
     return (
       <div>
         <h1>タイトル</h1>
-        <button onClick= {onStart}> スタート </button>
+        <button className="fancy-btn" onClick= {onStart}> スタート </button>
       </div>
     )
   };
@@ -307,6 +323,42 @@ export const App = () => {
     )
   }
 
+
+  //TODO 描画用の処理
+  const ResultUI: React.FC<ResultProps> = ({ runners_list }) => {
+    const [selectedResult, setSelectedResult] = useState<ResultProps | null> (null);
+    // const [RunnersListState, setRunnerListState] = useState(runners_list);
+    return (
+      <div className="resultContainer">
+        <div className="resultSidebar">
+         
+          {runners_list.map((item) => (
+            <div
+            key={item.order}
+            onClick={() => setSelectedResult(item)}
+            className={`resultItem ${selectedResult?.order === item.order ? "resultActive" : ""}`}
+            >
+              {item.order + " " + item.view_name}
+            </div>
+          ))}
+        </div>
+
+        <div className="resultContent">
+          {selectedResult ? (
+            <>
+              <h2>{selectedResult.view_name} </h2>
+              <p>{selectedResult.description}</p>
+            </>
+          ): (
+            <p>項目を選択してください</p>
+          )
+        }
+        </div>
+      </div>
+    );
+
+  }
+
   const [current_scene, setScene] = useState<Scene>("title");
   const sceneRef = useRef<Scene>(current_scene);
   // current_scene監視用
@@ -326,10 +378,6 @@ export const App = () => {
     console.log("current_scene is" + current_scene );
   }
 
-  const handleResult = () => {
-    setScene("result");
-    console.log("current_scene is " + current_scene);
-  }
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -338,6 +386,8 @@ export const App = () => {
   const [debug_remain, setDebug_remain] = useState(100);
 
   const myGameScene = useRef<GameScene | null>(null);
+
+
 
   // 初期化
   useEffect(() => {
@@ -381,6 +431,45 @@ export const App = () => {
   const sleep = (ms:2000) => {
     new Promise(resolve => setTimeout(resolve, ms));
   }
+
+  type ResultProps = {
+    runners_list:ResultRunner[];
+  }
+  const [result_for_view_list,setResultForViewList] = useState<ResultRunner[]>([]);
+  // resultに遷移する
+
+  const handleResult = () => {
+    setScene("result");
+
+    // 着順をもとにResultRunnerを作成
+    // TODO: gameobjectのバリデーション
+    const order_label:string[] = ["1th", "2th", "3th", "4th"];
+    const order_descript:string[] = [
+      "1位のテキスト",
+      "2位のテキスト",
+      "3位のテキスト",
+      "4位のテキスト"
+    ];
+    
+    // result runnerを作成
+    order_label.forEach((order, index) => {
+      if (!myGameScene.current) return;
+    
+      const one_runner:Sprite = myGameScene.current?.judgeman.arrived_order[order]
+      const runner_for_view:ResultRunner = new  ResultRunner(
+        one_runner.name,
+        one_runner.view_name,
+        order,
+        order_descript[index]
+         );
+      // result_for_view_list.push(runner_for_view);
+      setResultForViewList(prev => [...prev, runner_for_view]);
+      console.log("set " + one_runner.name + " to " + order);
+    }); 
+
+
+    console.log("current_scene is " + current_scene);
+  }
   
 
   // 画像のレンダリング
@@ -412,6 +501,7 @@ export const App = () => {
 
       if (sceneRef.current === "result"){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
       }
       
 
@@ -434,15 +524,24 @@ export const App = () => {
 
   return (
     <>
-    <canvas ref={ canvasRef } width = {1000} height = {600}></canvas>
+    <div className="container">
+      <canvas ref={ canvasRef } width = {1000} height = {600}></canvas>
+      <div className="ui-layer">
+      {current_scene == "title" && <TitleUI onStart={ handleStartGame } />}
+      {current_scene == "game" && <GameUI onReset={ resetPosition} onResult={ handleResult } gameFinished={ gameFinished }/>}
+      {current_scene == "result" && <ResultUI runners_list={ result_for_view_list } />}
+
+    </div>
+      
+    
+    </div>
+
 
 
     {/* <button onClick={ resetPosition }>リセット</button> */}
     
     <label>{ debug_string } </label> 
-    <label>reamin:{ debug_remain }</label>
-    {current_scene == "title" && <TitleUI onStart={ handleStartGame } />}
-    {current_scene == "game" && <GameUI onReset={ resetPosition} onResult={ handleResult } gameFinished={ gameFinished }/>}
+    
     
     
     </>
